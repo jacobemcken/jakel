@@ -1,11 +1,18 @@
 #!/usr/bin/env bb
 (ns jakel
   (:require [clj-yaml.core :as yaml]
+            [clojure.string :as str]
             [clojure.tools.cli :as cli]))
 
+(defn ensure-trailing-slash
+  [path]
+  (cond-> path
+    (not (str/ends-with? path "/"))
+    (str "/")))
+
 (def cli-options
-  [["-s" "--source DIR" "Directory where files are read from." :default "./"]
-   ["-d" "--destination DIR" "Directory where site files are written." :default "./_site/"]
+  [["-s" "--source DIR" "Directory where files are read from." :default "./" :parse-fn ensure-trailing-slash]
+   ["-d" "--destination DIR" "Directory where site files are written." :default "./_site/" :parse-fn ensure-trailing-slash]
    ["-c" "--config FILE" "Alternative config file." :default "_config.yml"]
    ["-h" "--help"]])
 
