@@ -1,6 +1,7 @@
 #!/usr/bin/env bb
 (ns jakel
   (:require [clj-yaml.core :as yaml]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :as cli]))
 
@@ -26,6 +27,36 @@
       slurp
       yaml/parse-string))
 
+; Article worth reading: https://mincong.io/2019/04/16/glob-expression-understanding/
+(def glob-patterns
+  ["[_.]**"
+   "**/[_.]**"])
+
+(defn match-globs-fn
+  "Takes a list of GLOB patterns and
+   return a functions that match agains all the patterns."
+  [glob-patterns]
+  (let [matcher-fns
+        (->> glob-patterns
+             (map #(let [matcher (.getPathMatcher
+                                  (java.nio.file.FileSystems/getDefault)
+                                  (str "glob:" %))]
+                     (fn [path]
+                       #_(println "Matching" path " -> " %)
+                       (.matches matcher path)))))]
+    (fn [relative-path]
+      (some #(% relative-path) matcher-fns))))
+
+(defn find-eligible-files
+  [^String dir-path-str]
+  (let [dir (io/file dir-path-str)
+        base-path (.toPath dir)
+        match-fn (match-globs-fn glob-patterns)]
+    (->> dir
+         file-seq
+         rest
+         (remove #(match-fn (.relativize base-path (.toPath %)))))))
+
 (defn main
   [& args]
   (let [{:keys [options arguments _summary]} (cli/parse-opts args cli-options)
@@ -34,6 +65,8 @@
       (println (usage))
       (System/exit 2))
 
+    (println (str/join "\n" (map #(.getCanonicalPath %)
+                                 (find-eligible-files (:source options)))))
     (println "building!")
     (println (read-config (str (:source options) (:config options))))))
 
