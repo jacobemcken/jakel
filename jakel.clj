@@ -3,7 +3,8 @@
   (:require [clj-yaml.core :as yaml]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.tools.cli :as cli]))
+            [clojure.tools.cli :as cli]
+            [frontmatter]))
 
 (defn ensure-trailing-slash
   [path]
@@ -57,6 +58,16 @@
          rest
          (remove #(match-fn (.relativize base-path (.toPath %)))))))
 
+(defn parse-html
+  [file]
+  (println "parse html")
+  (let [{:keys [frontmatter body]} (frontmatter/parse (slurp file))]
+    (println "frontmatter" frontmatter)
+    ))
+
+(def special-parsing
+  {:html parse-html})
+
 (defn main
   [& args]
   (let [{:keys [options arguments _summary]} (cli/parse-opts args cli-options)
@@ -65,9 +76,19 @@
       (println (usage))
       (System/exit 2))
 
-    (println (str/join "\n" (map #(.getCanonicalPath %)
-                                 (find-eligible-files (:source options)))))
     (println "building!")
+    (let [files (find-eligible-files (:source options))]
+      (doseq [file files]
+        (println "Parsing:" file)
+        (let [ext (some->> (.getName file)
+                           (re-find #"^(.+)(\.([^.]+))$")
+                           last
+                           keyword)]
+          (if (contains? #{:html} ext)
+            (do (println "- Special parse")
+                ((special-parsing ext) file))
+            (println "- Just copy")))))
+
     (println (read-config (str (:source options) (:config options))))))
 
 (apply main *command-line-args*)
