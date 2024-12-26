@@ -4,7 +4,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
-            [frontmatter]))
+            [frontmatter])
+  (:import (java.io File)))
 
 (defn ensure-trailing-slash
   [path]
@@ -58,15 +59,29 @@
          rest
          (remove #(match-fn (.relativize base-path (.toPath %)))))))
 
-(defn parse-html
-  [file]
-  (println "parse html")
-  (let [{:keys [frontmatter body]} (frontmatter/parse (slurp file))]
-    (println "frontmatter" frontmatter)
-    ))
+(defn get-ext-key
+  [file-name]
+  (some->> file-name
+           (re-find #"^(.+)(\.([^.]+))$")
+           last
+           str/lower-case
+           keyword))
 
-(def special-parsing
-  {:html parse-html})
+(defmulti parse
+  (fn [^File file]
+    (get-ext-key (.getName file))))
+
+(defmethod parse :html
+  [^File file]
+  (println "- HTML template")
+  (let [{:keys [frontmatter body]} (frontmatter/parse (slurp file))]
+    (println "frontmatter" frontmatter)))
+
+(defmethod parse :default
+  [^File file]
+  (println "- No preprocessing")
+  (when (.isFile file)
+    (slurp file)))
 
 (defn main
   [& args]
@@ -80,14 +95,7 @@
     (let [files (find-eligible-files (:source options))]
       (doseq [file files]
         (println "Parsing:" file)
-        (let [ext (some->> (.getName file)
-                           (re-find #"^(.+)(\.([^.]+))$")
-                           last
-                           keyword)]
-          (if (contains? #{:html} ext)
-            (do (println "- Special parse")
-                ((special-parsing ext) file))
-            (println "- Just copy")))))
+        (parse file)))
 
     (println (read-config (str (:source options) (:config options))))))
 
