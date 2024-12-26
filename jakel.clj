@@ -91,4 +91,5 @@
 
     (println (read-config (str (:source options) (:config options))))))
 
-(apply main *command-line-args*)
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply main *command-line-args*))
