@@ -50,14 +50,13 @@
       (some #(% relative-path) matcher-fns))))
 
 (defn find-eligible-files
-  [^String dir-path-str]
+  [^String dir-path-str {:keys [filter-fn] :or {filter-fn (constantly true)}}]
   (let [dir (io/file dir-path-str)
-        base-path (.toPath dir)
-        match-fn (match-globs-fn glob-patterns)]
+        base-path (.toPath dir)]
     (->> dir
          file-seq
          rest
-         (remove #(match-fn (.relativize base-path (.toPath %)))))))
+         (filter #(filter-fn (.relativize base-path (.toPath %)))))))
 
 (defn get-ext-key
   [file-name]
@@ -90,12 +89,13 @@
     (when (not= "build" command)
       (println (usage))
       (System/exit 2))
-
-    (println "building!")
-    (let [files (find-eligible-files (:source options))]
-      (doseq [file files]
-        (println "Parsing:" file)
-        (parse file)))
+    
+    (let [filter-fn (complement (match-globs-fn glob-patterns))]
+      (println "\nbuilding!")
+      (let [files (find-eligible-files (:source options) {:filter-fn filter-fn})]
+        (doseq [file files]
+          (println "Parsing:" file)
+          (parse file))))
 
     (println (read-config (str (:source options) (:config options))))))
 
