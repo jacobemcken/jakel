@@ -49,14 +49,22 @@
     (fn [relative-path]
       (some #(% relative-path) matcher-fns))))
 
-(defn find-eligible-files
-  [^String dir-path-str {:keys [filter-fn] :or {filter-fn (constantly true)}}]
+(defn process-files
+  "Takes string with a path to the dir that needs processing."
+  [^String dir-path-str {:keys [filter-fn process-fn]
+                         :or {filter-fn (constantly true)}}]
+  {:pre  [(fn? process-fn)]}
   (let [dir (io/file dir-path-str)
         base-path (.toPath dir)]
     (->> dir
          file-seq
          rest
-         (filter #(filter-fn (.relativize base-path (.toPath %)))))))
+         (keep (fn [file]
+                 (let [relative-path (.relativize base-path (.toPath file))]
+                   (when (and (.isFile file)
+                           (filter-fn relative-path))
+                  (process-fn relative-path file)))))
+         (into {}))))
 
 (defn get-ext-key
   [file-name]
@@ -73,8 +81,7 @@
 (defmethod parse :html
   [^File file]
   (println "- HTML template")
-  (let [{:keys [frontmatter body]} (frontmatter/parse (slurp file))]
-    (println "frontmatter" frontmatter)))
+  (frontmatter/parse (slurp file)))
 
 (defmethod parse :default
   [^File file]
@@ -92,10 +99,10 @@
     
     (let [filter-fn (complement (match-globs-fn glob-patterns))]
       (println "\nbuilding!")
-      (let [files (find-eligible-files (:source options) {:filter-fn filter-fn})]
-        (doseq [file files]
-          (println "Parsing:" file)
-          (parse file))))
+      (let [files (process-files (:source options) {:filter-fn filter-fn
+                                                    :process-fn (fn [relative-path file]
+                                                                  [(.toString relative-path) (parse file)])})]
+        (println (keys files))))
 
     (println (read-config (str (:source options) (:config options))))))
 
