@@ -4,7 +4,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
-            [frontmatter])
+            [frontmatter]
+            [wet.core :as wet])
   (:import (java.io File)))
 
 (defn ensure-trailing-slash
@@ -66,6 +67,10 @@
                   (process-fn relative-path file)))))
          (into {}))))
 
+(defn strip-extension
+  [file-name]
+  (str/replace file-name #"\.([^.]+)$" ""))
+
 (defn get-ext-key
   [file-name]
   (some->> file-name
@@ -75,19 +80,36 @@
            keyword))
 
 (defmulti parse
-  (fn [^File file]
+  (fn [^File file _ctx]
     (get-ext-key (.getName file))))
 
 (defmethod parse :html
-  [^File file]
+  [^File file ctx]
   (println "- HTML template")
-  (frontmatter/parse (slurp file)))
+  (let [{:keys [body frontmatter]} (frontmatter/parse (slurp file))
+        liquid-context (update (:liquid ctx) :params merge frontmatter)
+        content (-> body
+                    (wet/parse)
+                    (wet/render liquid-context))]
+    (if-let [layout (:layout frontmatter)]
+      (wet/render (get-in ctx [:layouts layout :body])
+                  (assoc-in liquid-context [:params :content] content))
+      content)))
 
 (defmethod parse :default
-  [^File file]
+  [^File file _ctx]
   (println "- No preprocessing")
   (when (.isFile file)
     (slurp file)))
+
+(defn prepare
+  "Takes a file and returns a map with frontmantter and a wet template in body:
+   {:frontmatter {:title \"Some title\" ...} :body Wet template (Liquid)}"
+  [^File file]
+  (-> file
+      slurp
+      frontmatter/parse
+      (update :body wet/parse)))
 
 (defn main
   [& args]
@@ -96,15 +118,30 @@
     (when (not= "build" command)
       (println (usage))
       (System/exit 2))
-    
-    (let [filter-fn (complement (match-globs-fn glob-patterns))]
-      (println "\nbuilding!")
-      (let [files (process-files (:source options) {:filter-fn filter-fn
-                                                    :process-fn (fn [relative-path file]
-                                                                  [(.toString relative-path) (parse file)])})]
-        (println (keys files))))
 
-    (println (read-config (str (:source options) (:config options))))))
+    (let [filter-fn (complement (match-globs-fn glob-patterns))
+          config (read-config (str (:source options) (:config options)))
+          layouts (process-files (str (:source options) "_layouts")
+                                 {:process-fn (fn [_relative-path file]
+                                                [(strip-extension (.getName file)) (prepare file)])})
+          _ (println "Read layouts\n" (keys layouts))
+          includes (process-files (str (:source options) "_includes")
+                                  {:process-fn (fn [_relative-path file]
+                                                 [(.getName file) (prepare file)])})
+          _ (println "Read includes\n" (keys includes))]
+
+      (println "\nbuilding!")
+      (let [files (process-files (:source options)
+                                 {:filter-fn filter-fn
+                                  :process-fn (fn [relative-path file]
+                                                [(.toString relative-path)
+                                                 (parse file {:layouts layouts
+                                                              :liquid {:params {:site config
+                                                                                :paginator {:posts [{:url "http://something/" :title "My post"}
+                                                                                                    {:url "http://somethingelse/" :title "Another post"}]}}
+                                                                       :templates includes}})])})]
+        (println (get files "index.html"))
+        (println (keys files))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply main *command-line-args*))
