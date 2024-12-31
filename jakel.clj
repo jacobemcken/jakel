@@ -110,15 +110,11 @@
 (defmethod parse :html
   [^File file ctx]
   (println "- HTML template")
-  (let [{:keys [body frontmatter]} (frontmatter/parse (slurp file))
-        liquid-context (update (:liquid ctx) :params merge frontmatter)
-        content (-> body
-                    (wet/parse)
-                    (wet/render liquid-context))]
-    (if-let [layout (:layout frontmatter)]
-      (wet/render (get-in ctx [:layouts layout :body])
-                  (assoc-in liquid-context [:params :content] content))
-      content)))
+  (let [page (prepare file)
+        liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
+    (apply-layouts (update page :body wet/render liquid-context)
+                   liquid-context
+                   (:layouts ctx))))
 
 (defmethod parse :md
   [^File file ctx]
