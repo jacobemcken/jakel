@@ -79,6 +79,10 @@
            str/lower-case
            keyword))
 
+(defn str->input-stream
+  [^String s]
+  (io/input-stream (.getBytes s "UTF-8")))
+
 (defn prepare
   "Takes a file and returns a map with frontmantter and a wet template in body:
    {:frontmatter {:title \"Some title\" ...} :body Wet template (Liquid)}"
@@ -112,23 +116,32 @@
   (println "- HTML template")
   (let [page (prepare file)
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
-    (apply-layouts (update page :body wet/render liquid-context)
-                   liquid-context
-                   (:layouts ctx))))
+    (-> (update page :body wet/render liquid-context)
+        (apply-layouts liquid-context (:layouts ctx))
+        str->input-stream)))
 
 (defmethod parse :md
   [^File file ctx]
   (println "- Markdown template")
-  (let [page (frontmatter/parse (slurp file))]
-    (apply-layouts page
-                   (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))  ;; TODO add date
-                   (:layouts ctx))))
+  (let [page (frontmatter/parse (slurp file))
+        liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))] ;; TODO add date and slug
+    (-> page
+        (apply-layouts liquid-context (:layouts ctx))
+        str->input-stream)))
 
 (defmethod parse :default
   [^File file _ctx]
   (println "- No preprocessing")
   (when (.isFile file)
-    (slurp file)))
+    (io/input-stream file)))
+
+(defn write-content
+  [file-name content-input-stream]
+  (let [out-file (io/file file-name)]
+    (io/make-parents out-file)
+    (with-open [in content-input-stream
+                out (io/output-stream out-file)]
+      (io/copy in out))))
 
 (defn main
   [& args]
@@ -166,8 +179,8 @@
                                                                                 :paginator {:posts [{:url "http://something/" :title "My post"}
                                                                                                     {:url "http://somethingelse/" :title "Another post"}]}}
                                                                        :templates includes}})])})]
-        (println (get files "index.html"))
-        (println (keys files))))))
+        (doseq [[file-name content] files]
+          (write-content (str (:destination options) file-name) content))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply main *command-line-args*))
