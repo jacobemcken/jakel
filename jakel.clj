@@ -96,6 +96,17 @@
                   (assoc-in liquid-context [:params :content] content))
       content)))
 
+(defmethod parse :md
+  [^File file ctx]
+  (println "- Markdown template")
+  (let [{:keys [body frontmatter]} (frontmatter/parse (slurp file))
+        liquid-context {:page frontmatter} ;; TODO add date
+        content body]
+    (if-let [layout (:layout frontmatter)]
+      (wet/render (get-in ctx [:layouts layout :body])
+                  (assoc-in liquid-context [:params :content] content))
+      content)))
+
 (defmethod parse :default
   [^File file _ctx]
   (println "- No preprocessing")
@@ -128,7 +139,14 @@
           includes (process-files (str (:source options) "_includes")
                                   {:process-fn (fn [_relative-path file]
                                                  [(.getName file) (prepare file)])})
-          _ (println "Read includes\n" (keys includes))]
+          _ (println "Read includes\n" (keys includes))
+          posts (process-files (str (:source options) "_posts")
+                               {:process-fn (fn [_relative-path file]
+                                              [(.getName file)
+                                               (parse file {:layouts layouts
+                                                            :liquid {:params {:site config}
+                                                                     :templates includes}})])})
+          _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
       (let [files (process-files (:source options)
