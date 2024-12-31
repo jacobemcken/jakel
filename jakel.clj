@@ -100,12 +100,16 @@
   [^File file ctx]
   (println "- Markdown template")
   (let [{:keys [body frontmatter]} (frontmatter/parse (slurp file))
-        liquid-context {:page frontmatter} ;; TODO add date
-        content body]
-    (if-let [layout (:layout frontmatter)]
-      (wet/render (get-in ctx [:layouts layout :body])
-                  (assoc-in liquid-context [:params :content] content))
-      content)))
+        liquid-context (assoc-in (:liquid ctx) [:params :page] frontmatter)] ;; TODO add date
+    (loop [layout-name (:layout frontmatter)
+           content body]
+      (if layout-name
+        (let [{:keys [frontmatter body]} (get-in ctx [:layouts layout-name])]
+          (recur (:layout frontmatter)
+                 (wet/render body
+                             (update liquid-context :params #(assoc % :content content
+                                                                    :layout frontmatter)))))
+        content))))
 
 (defmethod parse :default
   [^File file _ctx]
