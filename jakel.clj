@@ -83,6 +83,21 @@
   (fn [^File file _ctx]
     (get-ext-key (.getName file))))
 
+(defn apply-layouts
+  "Takes a page which is a map with a body and optional frontmatter,
+   a Liquid context which must match wet.core/render options.
+   The `liquid-context` contains templates required by `render` tags (Wet specific).
+   Layouts also contain similar templates but they are only used in a Jakel context (frontmatter)."
+  [page liquid-context layouts]
+  (loop [layout-name (get-in page [:frontmatter :layout])
+         content (get page :body)]
+    (if-not layout-name
+      content
+      (let [{:keys [frontmatter body]} (get layouts layout-name)]
+        (recur (:layout frontmatter)
+               (wet/render body (update liquid-context :params
+                                        assoc :content content :layout frontmatter)))))))
+
 (defmethod parse :html
   [^File file ctx]
   (println "- HTML template")
@@ -99,17 +114,10 @@
 (defmethod parse :md
   [^File file ctx]
   (println "- Markdown template")
-  (let [{:keys [body frontmatter]} (frontmatter/parse (slurp file))
-        liquid-context (assoc-in (:liquid ctx) [:params :page] frontmatter)] ;; TODO add date
-    (loop [layout-name (:layout frontmatter)
-           content body]
-      (if layout-name
-        (let [{:keys [frontmatter body]} (get-in ctx [:layouts layout-name])]
-          (recur (:layout frontmatter)
-                 (wet/render body
-                             (update liquid-context :params #(assoc % :content content
-                                                                    :layout frontmatter)))))
-        content))))
+  (let [page (frontmatter/parse (slurp file))]
+    (apply-layouts page
+                   (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))  ;; TODO add date
+                   (:layouts ctx))))
 
 (defmethod parse :default
   [^File file _ctx]
