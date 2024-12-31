@@ -79,6 +79,15 @@
            str/lower-case
            keyword))
 
+(defn prepare
+  "Takes a file and returns a map with frontmantter and a wet template in body:
+   {:frontmatter {:title \"Some title\" ...} :body Wet template (Liquid)}"
+  [^File file]
+  (-> file
+      slurp
+      frontmatter/parse
+      (update :body wet/parse)))
+
 (defmulti parse
   (fn [^File file _ctx]
     (get-ext-key (.getName file))))
@@ -124,15 +133,6 @@
   (println "- No preprocessing")
   (when (.isFile file)
     (slurp file)))
-
-(defn prepare
-  "Takes a file and returns a map with frontmantter and a wet template in body:
-   {:frontmatter {:title \"Some title\" ...} :body Wet template (Liquid)}"
-  [^File file]
-  (-> file
-      slurp
-      frontmatter/parse
-      (update :body wet/parse)))
 
 (defn main
   [& args]
