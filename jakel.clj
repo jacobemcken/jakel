@@ -5,6 +5,7 @@
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
             [frontmatter]
+            [markdown.core :as md]
             [wet.core :as wet])
   (:import (java.io File)))
 
@@ -123,7 +124,9 @@
 (defmethod parse :md
   [^File file ctx]
   (println "- Markdown template")
-  (let [page (frontmatter/parse (slurp file))
+  (let [page (-> (slurp file)
+                 (frontmatter/parse)
+                 (update :body md/md-to-html-string :reference-links? true))
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))] ;; TODO add date and slug
     (-> page
         (apply-layouts liquid-context (:layouts ctx))
@@ -179,7 +182,7 @@
                                                                                 :paginator {:posts [{:url "http://something/" :title "My post"}
                                                                                                     {:url "http://somethingelse/" :title "Another post"}]}}
                                                                        :templates includes}})])})]
-        (doseq [[file-name content] files]
+        (doseq [[file-name content] (concat files posts)]
           (write-content (str (:destination options) file-name) content))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
