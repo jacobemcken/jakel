@@ -168,7 +168,7 @@
           _ (println "Read includes\n" (keys includes))
           posts (process-files (str (:source options) "_posts")
                                {:process-fn (fn [_relative-path file]
-                                              [(.getName file)
+                                              [(str/replace (.getName file) #"\.(markdown|md)$" "/index.html")
                                                (parse file {:layouts layouts
                                                             :liquid {:params {:site config}
                                                                      :templates includes}})])})
