@@ -1,6 +1,7 @@
 #!/usr/bin/env bb
 (ns jakel
-  (:require [clj-yaml.core :as yaml]
+  (:require [babashka.http-server :as http-server]
+            [clj-yaml.core :as yaml]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
@@ -19,6 +20,7 @@
   [["-s" "--source DIR" "Directory where files are read from." :default "./" :parse-fn ensure-trailing-slash]
    ["-d" "--destination DIR" "Directory where site files are written." :default "./_site/" :parse-fn ensure-trailing-slash]
    ["-c" "--config FILE" "Alternative config file." :default "_config.yml"]
+   ["-P" "--port PORT" " Local server port. Listen on the given port. The default is `4000`." :default 4000 :parse-fn #(Integer/parseInt %)]
    ["-h" "--help"]])
 
 (defn usage
@@ -150,7 +152,7 @@
   [& args]
   (let [{:keys [options arguments _summary]} (cli/parse-opts args cli-options)
         [command] arguments]
-    (when (not= "build" command)
+    (when-not (contains? #{"build" "serve"} command)
       (println (usage))
       (System/exit 2))
 
@@ -183,7 +185,11 @@
                                                                                                     {:url "http://somethingelse/" :title "Another post"}]}}
                                                                        :templates includes}})])})]
         (doseq [[file-name content] (concat files posts)]
-          (write-content (str (:destination options) file-name) content))))))
+          (write-content (str (:destination options) file-name) content))
+
+        (when (= "serve" command)
+          (println "Serving assets from the directory" (:destination options))
+          (http-server/exec {:port (:port options) :dir (:destination options)}))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply main *command-line-args*))
