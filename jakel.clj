@@ -100,19 +100,25 @@
     (get-ext-key (.getName file))))
 
 (defn apply-layouts
-  "Takes a page which is a map with a body and optional frontmatter,
+  "Takes a template which is a map with a body and optional frontmatter,
    a Liquid context which must match wet.core/render options.
+   The template data structure looks as the following:
+
+       {:frontmatter {:layout \"default\" :title \"Some title\"}
+        :body \"some template\"}
+
    The `liquid-context` contains templates required by `render` tags (Wet specific).
    Layouts also contain similar templates but they are only used in a Jakel context (frontmatter)."
-  [page liquid-context layouts]
-  (loop [layout-name (get-in page [:frontmatter :layout])
-         content (get page :body)]
+  [initial-template liquid-context layouts]
+  (loop [layout-name (get-in initial-template [:frontmatter :layout])
+         template initial-template]
     (if-not layout-name
-      content
+      template
       (let [{:keys [frontmatter body]} (get layouts layout-name)]
         (recur (:layout frontmatter)
-               (wet/render body (update liquid-context :params
-                                        assoc :content content :layout frontmatter)))))))
+               (->> (wet/render body (update liquid-context :params
+                                             assoc :content (:body template) :layout frontmatter))
+                    (assoc template :body)))))))
 
 (defmethod parse :html
   [^File file ctx]
@@ -121,7 +127,7 @@
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
     (-> (update page :body wet/render liquid-context)
         (apply-layouts liquid-context (:layouts ctx))
-        str->input-stream)))
+        (update :body str->input-stream))))
 
 (defmethod parse :md
   [^File file ctx]
@@ -132,13 +138,13 @@
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))] ;; TODO add date and slug
     (-> page
         (apply-layouts liquid-context (:layouts ctx))
-        str->input-stream)))
+        (update :body str->input-stream))))
 
 (defmethod parse :default
   [^File file _ctx]
   (println "- No preprocessing")
   (when (.isFile file)
-    (io/input-stream file)))
+    {:body (io/input-stream file)}))
 
 (defn write-content
   [file-name content-input-stream]
@@ -185,7 +191,7 @@
                                                                                                     {:url "http://somethingelse/" :title "Another post"}]}}
                                                                        :templates includes}})])})]
         (doseq [[file-name content] (concat files posts)]
-          (write-content (str (:destination options) file-name) content))
+          (write-content (str (:destination options) file-name) (:body content)))
 
         (when (= "serve" command)
           (println "Serving assets from the directory" (:destination options))
