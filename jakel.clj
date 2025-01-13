@@ -130,12 +130,13 @@
         (update :body str->input-stream))))
 
 (defmethod parse :md
-  [^File file ctx]
+  [^File file {:keys [enrich] :as ctx :or {enrich identity}}]
   (println "- Markdown template")
   (let [page (-> (slurp file)
                  (frontmatter/parse)
+                 enrich ; TODO frontmatter should have priority
                  (update :body md/md-to-html-string :reference-links? true))
-        liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))] ;; TODO add date and slug
+        liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
     (-> page
         (apply-layouts liquid-context (:layouts ctx))
         (update :body str->input-stream))))
@@ -153,6 +154,31 @@
     (with-open [in content-input-stream
                 out (io/output-stream out-file)]
       (io/copy in out))))
+
+(defn string-to-instant
+  "Jekyll defaults to 12 midday."
+  [date-str]
+  (java.time.Instant/parse (str date-str "T12:00:00Z")))
+
+(defn extract-excerpt
+  [post]
+  (let [split-pattern (or (some-> (get-in post [:frontmatter :excerpt_separator])
+                                  (re-pattern))
+                          #"\n\n")]
+    (-> post :body str/triml (str/split split-pattern) first
+        (md/md-to-html-string :reference-links? true))))
+
+(defn enrich-post
+  "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
+  [post file-name]
+  (let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)
+        path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
+    (update post :frontmatter
+            assoc
+            :excerpt (extract-excerpt post)
+            :date (string-to-instant date-str)
+            :out-file (str path-without-ext "/index.html")
+            :url (str path-without-ext "/"))))
 
 (defn main
   [& args]
@@ -176,6 +202,7 @@
                                {:process-fn (fn [_relative-path file]
                                               [(str/replace (.getName file) #"\.(markdown|md)$" "/index.html")
                                                (parse file {:layouts layouts
+                                                            :enrich #(enrich-post % (.getName file))
                                                             :liquid {:params {:site config}
                                                                      :templates includes}})])})
           _ (println "Read posts\n" (keys posts))]
