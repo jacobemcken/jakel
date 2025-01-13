@@ -8,7 +8,9 @@
             [frontmatter]
             [markdown.core :as md]
             [wet.core :as wet])
-  (:import (java.io File)))
+  (:import (java.io File)
+           (java.time ZoneId)
+           (java.time.format DateTimeFormatter)))
 
 (defn ensure-trailing-slash
   [path]
@@ -160,6 +162,14 @@
   [date-str]
   (java.time.Instant/parse (str date-str "T12:00:00Z")))
 
+(def date-formatter
+  (.withZone (DateTimeFormatter/ofPattern "dd LLL uuuu")
+             (ZoneId/systemDefault)))
+
+(defn date-to-string
+  [instant & _args]
+  (.format date-formatter instant))
+
 (defn extract-excerpt
   [post]
   (let [split-pattern (or (some-> (get-in post [:frontmatter :excerpt_separator])
@@ -179,6 +189,10 @@
             :date (string-to-instant date-str)
             :out-file (str path-without-ext "/index.html")
             :url (str path-without-ext "/"))))
+
+(def jekyll-filters
+  "Returns a map of Jekyll specific filters (not part of Liquid)"
+  {:date_to_string date-to-string})
 
 (defn main
   [& args]
@@ -204,7 +218,8 @@
                                                (parse file {:layouts layouts
                                                             :enrich #(enrich-post % (.getName file))
                                                             :liquid {:params {:site config}
-                                                                     :templates includes}})])})
+                                                                     :templates includes
+                                                                     :filters jekyll-filters}})])})
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
@@ -214,9 +229,12 @@
                                                 [(.toString relative-path)
                                                  (parse file {:layouts layouts
                                                               :liquid {:params {:site config
-                                                                                :paginator {:posts [{:url "http://something/" :title "My post"}
-                                                                                                    {:url "http://somethingelse/" :title "Another post"}]}}
-                                                                       :templates includes}})])})]
+                                                                                :paginator {:posts [{:url "http://something/" :title "My post"
+                                                                                                     :date (java.time.Instant/now)}
+                                                                                                    {:url "http://somethingelse/" :title "Another post"
+                                                                                                     :date (java.time.Instant/now)}]}}
+                                                                       :templates includes
+                                                                       :filters jekyll-filters}})])})]
         (doseq [[file-name content] (concat files posts)]
           (write-content (str (:destination options) file-name) (:body content)))
 
