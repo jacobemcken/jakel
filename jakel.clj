@@ -72,6 +72,22 @@
                   (process-fn relative-path file)))))
          (into {}))))
 
+(defn paginate
+  [pagination all-posts page-no]
+  (let [posts (take pagination all-posts)
+        remaining-posts (seq (drop pagination all-posts))]
+    [{:page page-no
+      :posts posts
+      :next-page (when remaining-posts (+ 1 page-no))
+      :previous-page (when (> page-no 1) (dec page-no))}
+     remaining-posts]))
+
+(defn get-paginator
+  [posts]
+  (let [posts-frontmatter-only (map (comp :frontmatter val) posts)
+        [paginator _] (paginate 5 posts-frontmatter-only 1)]
+    paginator))
+
 (defn strip-extension
   [file-name]
   (str/replace file-name #"\.([^.]+)$" ""))
@@ -229,10 +245,7 @@
                                                 [(.toString relative-path)
                                                  (parse file {:layouts layouts
                                                               :liquid {:params {:site config
-                                                                                :paginator {:posts [{:url "http://something/" :title "My post"
-                                                                                                     :date (java.time.Instant/now)}
-                                                                                                    {:url "http://somethingelse/" :title "Another post"
-                                                                                                     :date (java.time.Instant/now)}]}}
+                                                                                :paginator (get-paginator posts)}
                                                                        :templates includes
                                                                        :filters jekyll-filters}})])})]
         (doseq [[file-name content] (concat files posts)]
