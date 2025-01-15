@@ -234,13 +234,14 @@
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
-      (let [files (process-files (:source options)
+      (let [paginated-pages (pagination/paginator (vals posts) {:size (:paginate config)})
+            files (process-files (:source options)
                                  {:filter-fn filter-fn
                                   :process-fn (fn [relative-path file]
                                                 [(.toString relative-path)
                                                  (parse file {:layouts layouts
                                                               :liquid {:params {:site config
-                                                                                :paginator (pagination/get-paginator (vals posts))}
+                                                                                :paginator (first paginated-pages)}
                                                                        :templates includes
                                                                        :filters jekyll-filters}})])})]
         (doseq [[file-name content] (concat files posts)]
