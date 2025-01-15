@@ -147,13 +147,32 @@
         (apply-layouts liquid-context (:layouts ctx))
         (update :body str->input-stream))))
 
+(defn add-excerpt
+  "The excerpt according to Jekyll:
+  > By default this is the first paragraph of content in the post...
+
+  Source: https://jekyllrb.com/docs/posts/
+  
+  Excerpt is identifed after HTML covertion, to avoid
+  parsing Markdown twice and having to find link references
+  \"behind\" excerpt separator."
+  [post]
+  (let [split-pattern (or (some-> (get-in post [:frontmatter :excerpt_separator])
+                                  (re-pattern))
+                          #"(?<=</p[^>]*>)")] ; use fancy "lookbehind" to keep the closing tag
+    (assoc-in post [:frontmatter :excerpt]
+              (-> (:body post)
+                  (str/split split-pattern 2)
+                  first))))
+
 (defmethod parse :md
   [^File file {:keys [enrich] :as ctx :or {enrich identity}}]
   (println "- Markdown template")
   (let [page (-> (slurp file)
                  (frontmatter/parse)
                  enrich ; TODO frontmatter should have priority
-                 (update :body md/md-to-html-string :reference-links? true))
+                 (update :body md/md-to-html-string :reference-links? true)
+                 (add-excerpt))
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
     (-> page
         (apply-layouts liquid-context (:layouts ctx))
@@ -186,14 +205,6 @@
   [instant & _args]
   (.format date-formatter instant))
 
-(defn extract-excerpt
-  [post]
-  (let [split-pattern (or (some-> (get-in post [:frontmatter :excerpt_separator])
-                                  (re-pattern))
-                          #"\n\n")]
-    (-> post :body str/triml (str/split split-pattern) first
-        (md/md-to-html-string :reference-links? true))))
-
 (defn enrich-post
   "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
   [post file-name]
@@ -201,7 +212,6 @@
         path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
     (update post :frontmatter
             assoc
-            :excerpt (extract-excerpt post)
             :date (string-to-instant date-str)
             :out-file (str path-without-ext "/index.html")
             :url (str path-without-ext "/"))))
