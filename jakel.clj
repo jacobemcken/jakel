@@ -7,6 +7,7 @@
             [clojure.tools.cli :as cli]
             [frontmatter]
             [markdown.core :as md]
+            [pagination]
             [wet.core :as wet])
   (:import (java.io File)
            (java.time ZoneId)
@@ -71,24 +72,6 @@
                            (filter-fn relative-path))
                   (process-fn relative-path file)))))
          (into {}))))
-
-(defn paginate
-  [pagination all-posts page-no]
-  (let [posts (take pagination all-posts)
-        remaining-posts (seq (drop pagination all-posts))]
-    [{:page page-no
-      :posts posts
-      :next-page (when remaining-posts (+ 1 page-no))
-      :previous-page (when (> page-no 1) (dec page-no))}
-     remaining-posts]))
-
-(defn get-paginator
-  [posts]
-  (let [posts-frontmatter-only (->> posts
-                                    (map :frontmatter)
-                                    (sort-by :date #(compare %2 %1)))
-        [paginator _] (paginate 5 posts-frontmatter-only 1)]
-    paginator))
 
 (defn strip-extension
   [file-name]
@@ -257,7 +240,7 @@
                                                 [(.toString relative-path)
                                                  (parse file {:layouts layouts
                                                               :liquid {:params {:site config
-                                                                                :paginator (get-paginator (vals posts))}
+                                                                                :paginator (pagination/get-paginator (vals posts))}
                                                                        :templates includes
                                                                        :filters jekyll-filters}})])})]
         (doseq [[file-name content] (concat files posts)]
