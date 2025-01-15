@@ -222,15 +222,17 @@
           includes (process-files (str (:source options) "_includes")
                                   {:process-fn (fn [_relative-path file]
                                                  [(.getName file) (prepare file)])})
+          liquid-context {:params {:site config}
+                          :templates includes
+                          :filters jekyll-filters}
+
           _ (println "Read includes\n" (keys includes))
           posts (process-files (str (:source options) "_posts")
                                {:process-fn (fn [_relative-path file]
                                               [(str/replace (.getName file) #"\.(markdown|md)$" "/index.html")
                                                (parse file {:layouts layouts
                                                             :enrich #(enrich-post % (.getName file))
-                                                            :liquid {:params {:site config}
-                                                                     :templates includes
-                                                                     :filters jekyll-filters}})])})
+                                                            :liquid liquid-context})])})
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
@@ -240,10 +242,8 @@
                                   :process-fn (fn [relative-path file]
                                                 [(.toString relative-path)
                                                  (parse file {:layouts layouts
-                                                              :liquid {:params {:site config
-                                                                                :paginator (first paginated-pages)}
-                                                                       :templates includes
-                                                                       :filters jekyll-filters}})])})]
+                                                              :liquid (-> liquid-context
+                                                                          (update :params assoc :paginator (first paginated-pages)))})])})]
         (doseq [[file-name content] (concat files posts)]
           (write-content (str (:destination options) file-name) (:body content)))
 
