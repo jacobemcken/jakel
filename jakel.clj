@@ -84,7 +84,9 @@
 
 (defn get-paginator
   [posts]
-  (let [posts-frontmatter-only (map (comp :frontmatter val) posts)
+  (let [posts-frontmatter-only (->> posts
+                                    (map :frontmatter)
+                                    (sort-by :date #(compare %2 %1)))
         [paginator _] (paginate 5 posts-frontmatter-only 1)]
     paginator))
 
@@ -255,7 +257,7 @@
                                                 [(.toString relative-path)
                                                  (parse file {:layouts layouts
                                                               :liquid {:params {:site config
-                                                                                :paginator (get-paginator posts)}
+                                                                                :paginator (get-paginator (vals posts))}
                                                                        :templates includes
                                                                        :filters jekyll-filters}})])})]
         (doseq [[file-name content] (concat files posts)]
