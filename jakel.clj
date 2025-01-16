@@ -212,6 +212,10 @@
 
       (println "\nbuilding!")
       (let [paginated-pages (pagination/paginator (vals posts) {:size (:paginate config)})
+            index-pages (pagination/generator (rest paginated-pages)
+                             (prepare (io/file (str (:source options) "index.html")))
+                             liquid-context
+                             layouts)
             files (process-files (:source options)
                                  {:filter-fn filter-fn
                                   :process-fn (fn [relative-path file]
@@ -219,7 +223,7 @@
                                                  (parse file {:layouts layouts
                                                               :liquid (-> liquid-context
                                                                           (update :params assoc :paginator (first paginated-pages)))})])})]
-        (doseq [[file-name content] (concat files posts)]
+        (doseq [[file-name content] (concat files posts index-pages)]
           (write-content (str (:destination options) file-name) (:body content)))
 
         (when (= "serve" command)

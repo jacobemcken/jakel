@@ -2,7 +2,9 @@
   "Jekyll docs: https://jekyllrb.com/docs/pagination/
    
    GitHub: https://github.com/sverrirs/jekyll-paginate-v2"
-  (:require [clojure.math :as math]))
+  (:require [clojure.math :as math]
+            [jakel.utils :as utils]
+            [wet.core :as wet]))
 
 (defn pagination-page
   [posts attr]
@@ -40,3 +42,14 @@
         pages
         (let [[page remaining-posts] (pagination-page posts attr)]
           (recur remaining-posts page (conj pages page)))))))
+
+(defn generator
+  [paginated-pages template liquid-context layouts]
+  (->> paginated-pages
+       (map (fn [page]
+              [(str "page" (:page page) "/")
+               (-> template
+                   (update :body wet/render (-> liquid-context
+                                                (update :params assoc :paginator page)))
+                   (utils/apply-layouts liquid-context layouts))]))
+       (into {})))
