@@ -145,10 +145,11 @@
   (let [split-pattern (or (some-> (get-in post [:frontmatter :excerpt_separator])
                                   (re-pattern))
                           #"(?<=</p[^>]*>)")] ; use fancy "lookbehind" to keep the closing tag
-    (assoc-in post [:frontmatter :excerpt]
-              (-> (:body post)
-                  (str/split split-pattern 2)
-                  first))))
+    (update post :frontmatter assoc
+            :excerpt (-> (:body post)
+                         (str/split split-pattern 2)
+                         first)
+            :content (:body post))))
 
 (defmethod parse :md
   [^File file {:keys [enrich] :as ctx :or {enrich identity}}]
