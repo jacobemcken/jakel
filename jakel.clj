@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [clojure.tools.cli :as cli]
             [frontmatter]
+            [jakel.utils :as utils]
             [markdown.core :as md]
             [pagination]
             [wet.core :as wet])
@@ -85,10 +86,6 @@
            str/lower-case
            keyword))
 
-(defn str->input-stream
-  [^String s]
-  (io/input-stream (.getBytes s "UTF-8")))
-
 (defn prepare
   "Takes a file and returns a map with frontmantter and a wet template in body:
    {:frontmatter {:title \"Some title\" ...} :body Wet template (Liquid)}"
@@ -102,35 +99,13 @@
   (fn [^File file _ctx]
     (get-ext-key (.getName file))))
 
-(defn apply-layouts
-  "Takes a template which is a map with a body and optional frontmatter,
-   a Liquid context which must match wet.core/render options.
-   The template data structure looks as the following:
-
-       {:frontmatter {:layout \"default\" :title \"Some title\"}
-        :body \"some template\"}
-
-   The `liquid-context` contains templates required by `render` tags (Wet specific).
-   Layouts also contain similar templates but they are only used in a Jakel context (frontmatter)."
-  [initial-template liquid-context layouts]
-  (loop [layout-name (get-in initial-template [:frontmatter :layout])
-         template initial-template]
-    (if-not layout-name
-      template
-      (let [{:keys [frontmatter body]} (get layouts layout-name)]
-        (recur (:layout frontmatter)
-               (->> (wet/render body (update liquid-context :params
-                                             assoc :content (:body template) :layout frontmatter))
-                    (assoc template :body)))))))
-
 (defmethod parse :html
   [^File file ctx]
   (println "- HTML template")
   (let [page (prepare file)
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
     (-> (update page :body wet/render liquid-context)
-        (apply-layouts liquid-context (:layouts ctx))
-        (update :body str->input-stream))))
+        (utils/apply-layouts liquid-context (:layouts ctx)))))
 
 (defn add-excerpt
   "The excerpt according to Jekyll:
@@ -161,8 +136,7 @@
                  (add-excerpt))
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
     (-> page
-        (apply-layouts liquid-context (:layouts ctx))
-        (update :body str->input-stream))))
+        (utils/apply-layouts liquid-context (:layouts ctx)))))
 
 (defmethod parse :default
   [^File file _ctx]
