@@ -3,6 +3,7 @@
    
    GitHub: https://github.com/sverrirs/jekyll-paginate-v2"
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [jakel.utils :as utils]
             [wet.core :as wet]))
 
@@ -19,29 +20,50 @@
             :page page-no
             :posts page-posts
             :next_page next-page
-            :next_page_path (when next-page
-                              (str "page" page-no "/"))
-            :previous_page previous-page
-            :next_page_path (when previous-page
-                              (str "page" page-no "/")))
+            :previous_page previous-page)
      remaining-posts]))
 
+(defn page-path
+  [permalink num]
+  (when num
+    (str/replace permalink #":num" (str num))))
+
+(defn add-paths
+  [{:keys [next_page previous_page] :as page} permalink]
+  (assoc page
+         :next_page_path (page-path permalink next_page)
+         :previous_page_path (page-path permalink previous_page)))
+
 (defn paginator
-  [all-posts conf]
-  (let [size (or (:size conf) 12)
-        total-posts (count all-posts)]
+  "Default configuration: https://github.com/sverrirs/jekyll-paginate-v2/blob/master/lib/jekyll-paginate-v2/generator/defaults.rb
+
+   Available values: https://github.com/sverrirs/jekyll-paginate-v2/blob/master/README-GENERATOR.md"
+  [all-posts {:keys [limit per_page permalink offset sort_field sort_reverse] :as _conf
+              :or {limit 0
+                   per_page 10
+                   permalink "/page:num/"
+                   offset 0
+                   sort_field "date"
+                   sort_reverse false}}]
+  (let [total-posts (count all-posts)
+        sort-by-k (keyword sort_field)
+        compare-fn (if sort_reverse compare #(compare %2 %1))]
     (loop [posts (->> all-posts
                       (map :frontmatter)
-                      (sort-by :date #(compare %2 %1)))
+                      (sort-by sort-by-k compare-fn)
+                      (drop offset)
+                      (take (if (pos? limit) limit total-posts)))
            attr {:page 0
-                 :per_page size
+                 :per_page per_page
                  :total_posts total-posts
-                 :total_pages (int (math/ceil (/ total-posts size)))}
+                 :total_pages (int (math/ceil (/ total-posts per_page)))}
            pages []]
       (if-not (seq posts)
         pages
         (let [[page remaining-posts] (pagination-page posts attr)]
-          (recur remaining-posts page (conj pages page)))))))
+          (recur remaining-posts
+                 (add-paths page permalink)
+                 (conj pages page)))))))
 
 (defn generator
   [paginated-pages template liquid-context layouts]

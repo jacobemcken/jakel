@@ -211,7 +211,7 @@
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
-      (let [paginated-pages (pagination/paginator (vals posts) {:size (:paginate config)})
+      (let [paginated-pages (pagination/paginator (vals posts) {:per_page (:paginate config)})
             index-pages (pagination/generator (rest paginated-pages)
                              (prepare (io/file (str (:source options) "index.html")))
                              liquid-context
