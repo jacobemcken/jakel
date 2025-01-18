@@ -161,7 +161,7 @@
     {:body (io/input-stream file)}))
 
 (defn write-content
-  [file-name content-input-stream]
+  [content-input-stream file-name]
   (let [out-file (io/file file-name)]
     (io/make-parents out-file)
     (with-open [in content-input-stream
@@ -223,7 +223,7 @@
                                                               :liquid (-> liquid-context
                                                                           (update :params assoc :paginator (first paginated-pages)))})])})]
         (doseq [[file-name content] (concat files posts index-pages)]
-          (write-content (str (:destination options) file-name) (:body content)))
+          (write-content (:body content) (str (:destination options) file-name)))
 
         (when (= "serve" command)
           (println "Serving assets from the directory" (:destination options))
