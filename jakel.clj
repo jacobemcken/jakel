@@ -118,10 +118,10 @@
   (let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)
         path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
     (update post :frontmatter
-            assoc
-            :date (string-to-instant date-str)
-            :out-file (str path-without-ext "/index.html")
-            :url (str path-without-ext "/"))))
+            ;; Fallback values if not in frontmatter
+            #(merge {:date (string-to-instant date-str)
+                     :out-file (str path-without-ext "/index.html")
+                     :url (str path-without-ext "/")} %))))
 
 (defn add-excerpt
   "The excerpt according to Jekyll:
@@ -147,7 +147,7 @@
   (println "- Markdown template")
   (let [page (-> (slurp file)
                  (frontmatter/parse)
-                 (enrich-post (.getName file)) ; TODO values in frontmatter should have priority
+                 (enrich-post (.getName file))
                  (update :body md/md-to-html-string :reference-links? true)
                  (add-excerpt))
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
