@@ -107,6 +107,22 @@
     (-> (update page :body wet/render liquid-context)
         (utils/apply-layouts liquid-context (:layouts ctx)))))
 
+(defn string-to-instant
+  "Jekyll defaults to 12 midday."
+  [date-str]
+  (java.time.Instant/parse (str date-str "T12:00:00Z")))
+
+(defn enrich-post
+  "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
+  [post file-name]
+  (let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)
+        path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
+    (update post :frontmatter
+            assoc
+            :date (string-to-instant date-str)
+            :out-file (str path-without-ext "/index.html")
+            :url (str path-without-ext "/"))))
+
 (defn add-excerpt
   "The excerpt according to Jekyll:
   > By default this is the first paragraph of content in the post...
@@ -127,11 +143,11 @@
             :content (:body post))))
 
 (defmethod parse :md
-  [^File file {:keys [enrich] :as ctx :or {enrich identity}}]
+  [^File file ctx]
   (println "- Markdown template")
   (let [page (-> (slurp file)
                  (frontmatter/parse)
-                 enrich ; TODO frontmatter should have priority
+                 (enrich-post (.getName file)) ; TODO values in frontmatter should have priority
                  (update :body md/md-to-html-string :reference-links? true)
                  (add-excerpt))
         liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
@@ -152,11 +168,6 @@
                 out (io/output-stream out-file)]
       (io/copy in out))))
 
-(defn string-to-instant
-  "Jekyll defaults to 12 midday."
-  [date-str]
-  (java.time.Instant/parse (str date-str "T12:00:00Z")))
-
 (def date-formatter
   (.withZone (DateTimeFormatter/ofPattern "dd LLL uuuu")
              (ZoneId/systemDefault)))
@@ -164,17 +175,6 @@
 (defn date-to-string
   [instant & _args]
   (.format date-formatter instant))
-
-(defn enrich-post
-  "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
-  [post file-name]
-  (let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)
-        path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
-    (update post :frontmatter
-            assoc
-            :date (string-to-instant date-str)
-            :out-file (str path-without-ext "/index.html")
-            :url (str path-without-ext "/"))))
 
 (def jekyll-filters
   "Returns a map of Jekyll specific filters (not part of Liquid)"
@@ -206,7 +206,6 @@
                                {:process-fn (fn [_relative-path file]
                                               [(str/replace (.getName file) #"\.(markdown|md)$" "/index.html")
                                                (parse file {:layouts layouts
-                                                            :enrich #(enrich-post % (.getName file))
                                                             :liquid liquid-context})])})
           _ (println "Read posts\n" (keys posts))]
 
