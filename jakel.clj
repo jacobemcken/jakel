@@ -115,11 +115,11 @@
 (defn enrich-post
   "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
   [post file-name]
-  (let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)
-        path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
+  (let [path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
     (update post :frontmatter
             ;; Fallback values if not in frontmatter
-            #(merge {:date (string-to-instant date-str)
+            #(merge {:date (when-let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)]
+                             (string-to-instant date-str))
                      :out-file (str path-without-ext "/index.html")
                      :url (str path-without-ext "/")} %))))
 
