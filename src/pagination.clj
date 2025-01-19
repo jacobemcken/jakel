@@ -13,8 +13,11 @@
     (str/replace permalink #":num" (str num))))
 
 (defn add-paths
-  [{:keys [next_page previous_page] :as pagination} permalink]
+  [{:keys [page next_page previous_page] :as pagination} permalink]
   (assoc pagination
+         :page_path (if (= 1 page)
+                      "/"
+                      (page-path permalink page))
          :next_page_path (page-path permalink next_page)
          :previous_page_path (page-path permalink previous_page)))
 
@@ -68,7 +71,7 @@
   [paginated-pages template liquid-context layouts]
   (->> paginated-pages
        (map (fn [page]
-              [(str "page" (:page page) "/")
+              [(str (:page_path page) "index.html")
                (-> template
                    (update :body wet/render (-> liquid-context
                                                 (update :params assoc :paginator page)))
