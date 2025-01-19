@@ -49,7 +49,7 @@
         sort-by-k (keyword sort_field)
         compare-fn (if sort_reverse compare #(compare %2 %1))]
     (loop [posts (->> all-posts
-                      (map :frontmatter)
+                      (map #(get-in % [:params :page]))
                       (sort-by sort-by-k compare-fn)
                       (drop offset)
                       (take (if (pos? limit) limit total-posts)))

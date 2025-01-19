@@ -86,13 +86,28 @@
            str/lower-case
            keyword))
 
+(defn convert->liquid-structure
+  [page at-path]
+  (-> page
+      (dissoc :frontmatter)
+      (assoc :layout (get-in page [:frontmatter :layout]))
+      (assoc-in (concat [:params] at-path) (:frontmatter page))))
+
 (defn prepare
-  "Takes a file and returns a map with frontmantter and a wet template in body:
-   {:frontmatter {:title \"Some title\" ...} :body Wet template (Liquid)}"
-  [^File file]
+  "Takes a Liquid file and returns a map with params and a wet template:
+
+       {:layout \"some_layout\"
+        :params {:at-path-key {:title \"Some title\" ...}}
+        :body \"Wet template (Liquid)\"}
+   
+   Depending on the context the frontmatter params should be placed in different keys."
+  ;; E.g. post & pages expect `:page`, layouts expect `:layout` & paginator plugin expects `:paginate` among others
+  ;; templates doesn't set any params (hence the possibility for nil)
+  [^File file & at-path]
   (-> file
       slurp
       frontmatter/parse
+      (convert->liquid-structure at-path)
       (update :body wet/parse)))
 
 (defmulti parse
@@ -103,7 +118,7 @@
   [^File file ctx]
   (println "- HTML template")
   (let [page (prepare file)
-        liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
+        liquid-context (update (:liquid ctx) :params merge (:params page))]
     (-> (update page :body wet/render liquid-context)
         (utils/apply-layouts liquid-context (:layouts ctx)))))
 
@@ -116,12 +131,12 @@
   "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
   [post file-name]
   (let [path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
-    (update post :frontmatter
-            ;; Fallback values if not in frontmatter
-            #(merge {:date (when-let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)]
-                             (string-to-instant date-str))
-                     :out-file (str path-without-ext "/index.html")
-                     :url (str path-without-ext "/")} %))))
+    (update-in post [:params :page]
+               ;; Fallback values if not in frontmatter
+               #(merge {:date (when-let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)]
+                                (string-to-instant date-str))
+                        :out-file (str path-without-ext "/index.html")
+                        :url (str path-without-ext "/")} %))))
 
 (defn add-excerpt
   "The excerpt according to Jekyll:
@@ -133,24 +148,25 @@
   parsing Markdown twice and having to find link references
   \"behind\" excerpt separator."
   [post]
-  (let [split-pattern (or (some-> (get-in post [:frontmatter :excerpt_separator])
+  (let [split-pattern (or (some-> (get-in post [:params :page :excerpt_separator])
                                   (re-pattern))
                           #"(?<=</p[^>]*>)")] ; use fancy "lookbehind" to keep the closing tag
-    (update post :frontmatter assoc
-            :excerpt (-> (:body post)
-                         (str/split split-pattern 2)
-                         first)
-            :content (:body post))))
+    (update-in post [:params :page] assoc
+               :excerpt (-> (:body post)
+                            (str/split split-pattern 2)
+                            first)
+               :content (:body post))))
 
 (defmethod parse :md
   [^File file ctx]
   (println "- Markdown template")
   (let [page (-> (slurp file)
                  (frontmatter/parse)
+                 (convert->liquid-structure [:page])
                  (enrich-post (.getName file))
                  (update :body md/md-to-html-string :reference-links? true)
                  (add-excerpt))
-        liquid-context (assoc-in (:liquid ctx) [:params :page] (:frontmatter page))]
+        liquid-context (update (:liquid ctx) :params merge (:params page))]
     (-> page
         (utils/apply-layouts liquid-context (:layouts ctx)))))
 
@@ -192,7 +208,7 @@
           config (read-config (str (:source options) (:config options)))
           layouts (process-files (str (:source options) "_layouts")
                                  {:process-fn (fn [_relative-path file]
-                                                [(strip-extension (.getName file)) (prepare file)])})
+                                                [(strip-extension (.getName file)) (prepare file [:layout])])})
           _ (println "Read layouts\n" (keys layouts))
           includes (process-files (str (:source options) "_includes")
                                   {:process-fn (fn [_relative-path file]
@@ -212,7 +228,7 @@
       (println "\nbuilding!")
       (let [paginated-pages (pagination/paginator (vals posts) {:per_page (:paginate config)})
             index-pages (pagination/generator (rest paginated-pages)
-                             (prepare (io/file (str (:source options) "index.html")))
+                             (prepare (io/file (str (:source options) "index.html")) [:page])
                              liquid-context
                              layouts)
             files (process-files (:source options)
