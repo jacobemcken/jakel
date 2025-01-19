@@ -66,9 +66,11 @@
           (recur remaining-posts page (conj pages page)))))))
 
 (defn generator
-  [paginated-pages template]
-  (->> paginated-pages
-       (map (fn [page]
-              [(str (:page_path page) "index.html")
-               (update template :params assoc :paginator page)]))
-       (into {})))
+  [files all-posts conf]
+  (let [template (get files "index.html")]
+    (->> (paginator all-posts conf)
+         (map (fn [page]
+                [(str (:page_path page) "index.html")
+                 (update template :params assoc :paginator page)]))
+         (into {})
+         (merge (dissoc files "index.html")))))

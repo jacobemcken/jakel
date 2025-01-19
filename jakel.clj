@@ -238,15 +238,13 @@
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
-      (let [paginated-pages (pagination/paginator (vals posts) {:per_page (:paginate config)})
-            index-pages (pagination/generator paginated-pages
-                                              (prepare (io/file (str (:source options) "index.html")) [:page]))
-            files (process-files (:source options)
-                                 {:filter-fn filter-fn
-                                  :process-fn (fn [relative-path file]
-                                                [(.toString relative-path)
-                                                 (parse file)])})]
-        (doseq [[file-name content] (concat files posts index-pages)]
+      (let [files (-> (:source options)
+                      (process-files {:filter-fn filter-fn
+                                      :process-fn (fn [relative-path file]
+                                                    [(.toString relative-path)
+                                                     (parse file)])})
+                      (pagination/generator (vals posts) {:per_page (:paginate config)}))]
+        (doseq [[file-name content] (concat files posts)]
           (-> (generate content {:layouts layouts :liquid liquid-context})
               (write-content (str (:destination options) file-name))))
 
