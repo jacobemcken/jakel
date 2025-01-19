@@ -133,7 +133,7 @@
                #(merge {:date (when-let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)]
                                 (string-to-instant date-str))
                         :out-file (str path-without-ext "/index.html")
-                        :url (str path-without-ext "/")} %))))
+                        :url (str "/" path-without-ext "/")} %))))
 
 (defn add-excerpt
   "The excerpt according to Jekyll:
