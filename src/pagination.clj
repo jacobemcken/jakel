@@ -20,7 +20,7 @@
          :previous_page_path (page-path permalink previous_page)))
 
 (defn pagination-page
-  [posts attr permalink]
+  [posts attr permalink template-title]
   (let [page-posts (take (:per_page attr) posts)
         remaining-posts (seq (drop (:per_page attr) posts))
         page-no (inc (:page attr))
@@ -32,7 +32,10 @@
          (assoc :page page-no
                 :posts page-posts
                 :next_page next-page
-                :previous_page previous-page)
+                :previous_page previous-page
+                :title (str/replace ":title - page :num" #":num|:title"
+                                    {":num" (str page-no)
+                                     ":title" (or (seq template-title) "Pagination")}))
          (add-paths permalink))
      remaining-posts]))
 
@@ -46,7 +49,8 @@
                    permalink "/page:num/"
                    offset 0
                    sort_field "date"
-                   sort_reverse false}}]
+                   sort_reverse false}}
+   template-title]
   (let [total-posts (count all-posts)
         sort-by-k (keyword sort_field)
         compare-fn (if sort_reverse compare #(compare %2 %1))]
@@ -62,13 +66,13 @@
            pages []]
       (if-not (seq posts)
         pages
-        (let [[page remaining-posts] (pagination-page posts attr permalink)]
+        (let [[page remaining-posts] (pagination-page posts attr permalink template-title)]
           (recur remaining-posts page (conj pages page)))))))
 
 (defn generator
   [files all-posts conf]
   (let [template (get files "index.html")]
-    (->> (paginator all-posts conf)
+    (->> (paginator all-posts conf (get-in template [:params :page :title]))
          (map (fn [page]
                 [(str (:page_path page) "index.html")
                  (update template :params assoc :paginator page)]))
