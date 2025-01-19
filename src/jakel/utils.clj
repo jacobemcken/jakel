@@ -20,7 +20,7 @@
   (loop [layout-name (:layout initial-template)
          template initial-template]
     (if-not layout-name
-      (update template :body str->input-stream)
+      template
       (let [{:keys [body params layout]} (get layouts layout-name)]
         (recur layout
                (->> (wet/render body (update liquid-context :params

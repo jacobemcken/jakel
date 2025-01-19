@@ -111,16 +111,13 @@
       (update :body wet/parse)))
 
 (defmulti parse
-  (fn [^File file _ctx]
+  (fn [^File file]
     (get-ext-key (.getName file))))
 
 (defmethod parse :html
-  [^File file ctx]
+  [^File file]
   (println "- HTML template")
-  (let [page (prepare file)
-        liquid-context (update (:liquid ctx) :params merge (:params page))]
-    (-> (update page :body wet/render liquid-context)
-        (utils/apply-layouts liquid-context (:layouts ctx)))))
+  (prepare file))
 
 (defn string-to-instant
   "Jekyll defaults to 12 midday."
@@ -158,23 +155,20 @@
                :content (:body post))))
 
 (defmethod parse :md
-  [^File file ctx]
+  [^File file]
   (println "- Markdown template")
-  (let [page (-> (slurp file)
-                 (frontmatter/parse)
-                 (convert->liquid-structure [:page])
-                 (enrich-post (.getName file))
-                 (update :body md/md-to-html-string :reference-links? true)
-                 (add-excerpt))
-        liquid-context (update (:liquid ctx) :params merge (:params page))]
-    (-> page
-        (utils/apply-layouts liquid-context (:layouts ctx)))))
+  (-> (slurp file)
+      (frontmatter/parse)
+      (convert->liquid-structure [:page])
+      (enrich-post (.getName file))
+      (update :body md/md-to-html-string :reference-links? true)
+      (add-excerpt)))
 
 (defmethod parse :default
-  [^File file _ctx]
+  [^File file]
   (println "- No preprocessing")
   (when (.isFile file)
-    {:body (io/input-stream file)}))
+    (io/input-stream file)))
 
 (defn write-content
   [content-input-stream file-name]
@@ -195,6 +189,25 @@
 (def jekyll-filters
   "Returns a map of Jekyll specific filters (not part of Liquid)"
   {:date_to_string date-to-string})
+
+(defmulti generate
+  (fn [x _ctx]
+    (cond
+      (instance? java.io.InputStream x) :binary
+      (map? x) :liquid ; will have :body, :layout & :params keys
+      :else (throw (ex-info "Unknown source" {:x x})))))
+
+(defmethod generate :binary
+  [x _ctx]
+  x)
+
+(defmethod generate :liquid
+  [liquid ctx]
+  (let [liquid-context (update (:liquid ctx) :params merge (:params liquid))]
+    (-> (update liquid :body wet/render liquid-context)
+        (utils/apply-layouts liquid-context (:layouts ctx))
+        :body
+        utils/str->input-stream)))
 
 (defn main
   [& args]
@@ -221,25 +234,21 @@
           posts (process-files (str (:source options) "_posts")
                                {:process-fn (fn [_relative-path file]
                                               [(str/replace (.getName file) #"\.(markdown|md)$" "/index.html")
-                                               (parse file {:layouts layouts
-                                                            :liquid liquid-context})])})
+                                               (parse file)])})
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
       (let [paginated-pages (pagination/paginator (vals posts) {:per_page (:paginate config)})
-            index-pages (pagination/generator (rest paginated-pages)
-                             (prepare (io/file (str (:source options) "index.html")) [:page])
-                             liquid-context
-                             layouts)
+            index-pages (pagination/generator paginated-pages
+                                              (prepare (io/file (str (:source options) "index.html")) [:page]))
             files (process-files (:source options)
                                  {:filter-fn filter-fn
                                   :process-fn (fn [relative-path file]
                                                 [(.toString relative-path)
-                                                 (parse file {:layouts layouts
-                                                              :liquid (-> liquid-context
-                                                                          (update :params assoc :paginator (first paginated-pages)))})])})]
+                                                 (parse file)])})]
         (doseq [[file-name content] (concat files posts index-pages)]
-          (write-content (:body content) (str (:destination options) file-name)))
+          (-> (generate content {:layouts layouts :liquid liquid-context})
+              (write-content (str (:destination options) file-name))))
 
         (when (= "serve" command)
           (println "Serving assets from the directory" (:destination options))

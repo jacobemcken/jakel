@@ -3,9 +3,7 @@
    
    GitHub: https://github.com/sverrirs/jekyll-paginate-v2"
   (:require [clojure.math :as math]
-            [clojure.string :as str]
-            [jakel.utils :as utils]
-            [wet.core :as wet]))
+            [clojure.string :as str]))
 
 (defn page-path
   [permalink num]
@@ -68,12 +66,9 @@
           (recur remaining-posts page (conj pages page)))))))
 
 (defn generator
-  [paginated-pages template liquid-context layouts]
+  [paginated-pages template]
   (->> paginated-pages
        (map (fn [page]
               [(str (:page_path page) "index.html")
-               (-> template
-                   (update :body wet/render (-> liquid-context
-                                                (update :params assoc :paginator page)))
-                   (utils/apply-layouts liquid-context layouts))]))
+               (update template :params assoc :paginator page)]))
        (into {})))
