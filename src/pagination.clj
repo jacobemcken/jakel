@@ -7,8 +7,19 @@
             [jakel.utils :as utils]
             [wet.core :as wet]))
 
+(defn page-path
+  [permalink num]
+  (when num
+    (str/replace permalink #":num" (str num))))
+
+(defn add-paths
+  [{:keys [next_page previous_page] :as pagination} permalink]
+  (assoc pagination
+         :next_page_path (page-path permalink next_page)
+         :previous_page_path (page-path permalink previous_page)))
+
 (defn pagination-page
-  [posts attr]
+  [posts attr permalink]
   (let [page-posts (take (:per_page attr) posts)
         remaining-posts (seq (drop (:per_page attr) posts))
         page-no (inc (:page attr))
@@ -16,23 +27,13 @@
                     (inc page-no))
         previous-page (when (> page-no 1)
                         (dec page-no))]
-    [(assoc attr
-            :page page-no
-            :posts page-posts
-            :next_page next-page
-            :previous_page previous-page)
+    [(-> attr
+         (assoc :page page-no
+                :posts page-posts
+                :next_page next-page
+                :previous_page previous-page)
+         (add-paths permalink))
      remaining-posts]))
-
-(defn page-path
-  [permalink num]
-  (when num
-    (str/replace permalink #":num" (str num))))
-
-(defn add-paths
-  [{:keys [next_page previous_page] :as page} permalink]
-  (assoc page
-         :next_page_path (page-path permalink next_page)
-         :previous_page_path (page-path permalink previous_page)))
 
 (defn paginator
   "Default configuration: https://github.com/sverrirs/jekyll-paginate-v2/blob/master/lib/jekyll-paginate-v2/generator/defaults.rb
@@ -60,10 +61,8 @@
            pages []]
       (if-not (seq posts)
         pages
-        (let [[page remaining-posts] (pagination-page posts attr)]
-          (recur remaining-posts
-                 (add-paths page permalink)
-                 (conj pages page)))))))
+        (let [[page remaining-posts] (pagination-page posts attr permalink)]
+          (recur remaining-posts page (conj pages page)))))))
 
 (defn generator
   [paginated-pages template liquid-context layouts]
