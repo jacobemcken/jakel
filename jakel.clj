@@ -138,6 +138,10 @@
       (convert->liquid-structure at-path)
       (update :body (comp wet/parse replace-include-syntax))))
 
+(defn load-include
+  [^File file]
+  (-> file slurp replace-include-syntax wet/parse))
+
 (defmulti parse
   (fn [^File file]
     (get-ext-key (.getName file))))
@@ -253,7 +257,7 @@
           _ (println "Read layouts\n" (keys layouts))
           includes (process-files (str (:source options) "_includes")
                                   {:process-fn (fn [_relative-path file]
-                                                 [(.getName file) (prepare file)])})
+                                                 [(.getName file) (load-include file)])})
           liquid-context {:params {:site config}
                           :templates includes
                           :filters jekyll-filters}
