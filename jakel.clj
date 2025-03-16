@@ -156,16 +156,31 @@
   [date-str]
   (java.time.Instant/parse (str date-str "T12:00:00Z")))
 
+(def date-url-formatter
+  (.withZone (DateTimeFormatter/ofPattern "/uuuu/MM/dd/")
+             (ZoneId/systemDefault)))
+
+(defn post-url
+  "Construct 'pretty' relative Jekyll URL for a post using the format:
+   https://jekyllrb.com/docs/permalinks/#built-in-formats"
+  [date categories path-without-ext]
+  (str (->> categories
+            (map str/lower-case)
+            (str/join "/"))
+       (.format date-url-formatter date)
+       path-without-ext "/"))
+
 (defn enrich-post
   "Takes a post and the source file, and enrich the post with `:url`, `:date` & `:out-file`."
   [post file-name]
   (let [path-without-ext (str/replace file-name #"\.(markdown|md)$" "")]
     (update-in post [:params :page]
-               ;; Fallback values if not in frontmatter
-               #(merge {:date (when-let [date-str (re-find #"^\d{4}-\d{2}-\d{2}" file-name)]
-                                (string-to-instant date-str))
-                        :out-file (str path-without-ext "/index.html")
-                        :url (str "/" path-without-ext "/")} %))))
+               (fn [page]
+                 (let [date (or (:date page)
+                                (some-> (re-find #"^\d{4}-\d{2}-\d{2}" file-name) string-to-instant))
+                       url (post-url date (:categories page) path-without-ext)
+                       fallback {:date date :url (str "/" url) :out-file (str url "index.html")}]
+                   (merge page fallback))))))
 
 (defn add-excerpt
   "The excerpt according to Jekyll:
@@ -265,8 +280,9 @@
           _ (println "Read includes\n" (keys includes))
           posts (process-files (str (:source options) "_posts")
                                {:process-fn (fn [_relative-path file]
-                                              [(str/replace (.getName file) #"\.(markdown|md)$" "/index.html")
-                                               (parse file)])})
+                                              (let [post (parse file)]
+                                                [(get-in post [:params :page :out-file])
+                                                 post]))})
           _ (println "Read posts\n" (keys posts))]
 
       (println "\nbuilding!")
