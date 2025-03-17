@@ -40,7 +40,9 @@
 ; Article worth reading: https://mincong.io/2019/04/16/glob-expression-understanding/
 (def glob-patterns
   ["[_.]**"
-   "**/[_.]**"])
+   "**/[_.]**"
+   "vendor/**/*"
+   "Gemfile*"])
 
 (defn match-globs-fn
   "Takes a list of GLOB patterns and
