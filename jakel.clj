@@ -115,7 +115,11 @@
 
 (defn load-include
   [^File file]
-  (-> file slurp include-support/replace-deprecated-tag wet/parse))
+  (-> file
+      slurp
+      include-support/replace-deprecated-tag
+      include-support/replace-deprecated-parameters
+      wet/parse))
 
 (defmulti parse
   (fn [^File file]

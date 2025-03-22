@@ -24,6 +24,13 @@
                       (str/join ", "))]
     [match (str "{% render " attr-kvs " %}")]))
 
+(defn replace-deprecated-parameters
+  "The render tag doesn't assume parameters to be contained in an `include` object."
+  [include-content]
+  (-> include-content
+      (str/replace #"\{[^}]*?\binclude\.\b[^}]*?\}"
+                   #(str/replace % #"\binclude\.\b" ""))))
+
 (defn replace-deprecated-tag
   "The Liquid include syntax is deprecated and therefor being replaced by `render` syntax."
   [template]
