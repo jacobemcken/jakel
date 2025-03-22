@@ -2,7 +2,7 @@
     (:require [clojure.java.io :as io]
               [clojure.string :as str]
               [wet.core :as wet])
-  (:import (java.time Instant ZoneId)
+  (:import (java.time Instant OffsetDateTime ZoneId)
            (java.time.format DateTimeFormatter)))
 
 (def date-placeholder-formatter
@@ -42,6 +42,10 @@
   [date-str]
   (java.time.Instant/parse (str date-str "T12:00:00Z")))
 
+(def date-frontmatter-formatter
+  (.withZone (DateTimeFormatter/ofPattern "yyyy-MM-dd HH:mm:ss X")
+             (ZoneId/systemDefault)))
+
 (defn get-placeholders
   "The docs is a bit vauge about how `:categories`, `:title` and `:slug`
    should behave, and if pages and posts behave the same:
@@ -56,7 +60,11 @@
         (select-keys [:categories :date :title :slug])
         ; From docs: Also Jekyll automatically parses out double slashes in the URLs, so if no categories are present, it will ignore this.
         (update :categories #(->> % (filter not-empty) (map str/lower-case) (str/join "/")))
-        (update :date #(or % (string-to-instant date-str)))
+        (update :date #(if %
+                         (-> %
+                             (OffsetDateTime/parse date-frontmatter-formatter)
+                             (.toInstant))
+                         (string-to-instant date-str)))
         (assoc :title (or (:slug page) slugified-title))
         (update :slug #(or % slugified-title)) ; (str/replace  #"[^a-zA-Z0-9\-]" "")
         (add-date-placeholders)
