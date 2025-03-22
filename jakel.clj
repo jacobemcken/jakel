@@ -142,23 +142,26 @@
         (assoc :placeholders placeholders-str-keys)
         (assoc :out-file (str (subs url 1) "index.html")))))
 
+(defn extract-markdown-links
+  [text]
+  (->> text
+       str/split-lines
+       (filter #(re-matches #"^\[[^\]]+\]:.*" %))))
+
 (defn add-excerpt
   "The excerpt according to Jekyll:
   > By default this is the first paragraph of content in the post...
 
-  Source: https://jekyllrb.com/docs/posts/
-  
-  Excerpt is identifed after HTML covertion, to avoid
-  parsing Markdown twice and having to find link references
-  \"behind\" excerpt separator."
+  Source: https://jekyllrb.com/docs/posts/"
   [post]
   (let [split-pattern (or (some-> (get-in post [:params :page :excerpt_separator])
                                   (re-pattern))
-                          #"(?<=</p[^>]*>)")] ; use fancy "lookbehind" to keep the closing tag
+                          #"\n\n")
+        [excerpt remaining] (str/split (:body post) split-pattern 2)]
     (update-in post [:params :page] assoc
-               :excerpt (-> (:body post)
-                            (str/split split-pattern 2)
-                            first)
+               :excerpt (->> (extract-markdown-links (or remaining ""))
+                             (cons excerpt)
+                             (str/join "\n"))
                :content (:body post))))
 
 (defmethod parse :md
@@ -168,8 +171,9 @@
       (frontmatter/parse)
       (convert->liquid-structure [:page])
       (enrich-post (.getName file))
+      (add-excerpt)
       (update :body md/md-to-html-string :reference-links? true)
-      (add-excerpt)))
+      (update-in [:params :page :excerpt] md/md-to-html-string :reference-links? true)))
 
 (defmethod parse :default
   [^File file]
