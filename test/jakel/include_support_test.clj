@@ -1,14 +1,14 @@
-(ns jakel.core-test
+(ns jakel.include-support-test
   (:require [clojure.test :refer [deftest is]]
-            [jakel :as sut]))
+            [jakel.include-support :as sut]))
 
-(deftest replace-include-syntax
+(deftest replace-deprecated-tag
   (is (=  "  {% if page.image %}
              {% render \"featured_image.html\", src: page.image, alt: page.image_alt %}
            {% endif %}
 
            {{ content }}"
-         (sut/replace-include-syntax
+         (sut/replace-deprecated-tag
           "  {% if page.image %}
              {% include featured_image.html
                 src=page.image
