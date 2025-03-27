@@ -37,10 +37,10 @@
                              (str/join "\n"))
                :content (:body post))))
 
-(defn parse
-  [post file-name]
-  (-> post
-      (enrich file-name)
+(defn finalize
+  "Takes a raw (Markdown) Page or Post and adds excerpt and converts Markdown to HTML."
+  [page-or-post]
+  (-> page-or-post
       (add-excerpt)
       (update :body md/md-to-html-string :reference-links? true)
       (update-in [:params :page :excerpt] md/md-to-html-string :reference-links? true)))

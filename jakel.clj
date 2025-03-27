@@ -135,7 +135,8 @@
   (-> (slurp file)
       (frontmatter/parse)
       (convert->liquid-structure [:page])
-      (post/parse (.getName file))))
+      (post/enrich (.getName file))
+      (post/finalize)))
 
 (defmethod parse :default
   [^File file]
